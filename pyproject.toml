@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aggregate-root"
-version = "0.0.1"
+version = "0.0.3"
 authors = [
   { name="Jeremy Willemse", email="jeremy@willemse.co" },
 ]
@@ -21,3 +21,11 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/willemse-and-co/aggregate-root"
 Issues = "https://github.com/willemse-and-co/aggregate-root/issues"
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pytest>=8.2.1"
+]
+
+[tool.hatch.envs.default.env-vars]
+PYTHONPATH = "src"

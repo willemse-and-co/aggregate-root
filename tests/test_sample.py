@@ -1,39 +1,12 @@
-# Aggregate Root
-
-Aggregate Root is a Python library that provides a base implementation for aggregate roots and domain events in a Domain-Driven Design (DDD) context. This library simplifies the creation and management of aggregate roots and domain events, enabling developers to focus on business logic and domain rules.
-
-## Installation
-You can install the `aggregate-root` library from PyPI using pip:
-
-```bash
-pip install aggregate-root
-```
-
-## Usage
-
-### `AggregateRoot` and `DomainEvent`
-
-`AggregateRoot` is the base class for aggregate roots, and `DomainEvent` is the base class for domain events. Together, they enable the creation and management of Domain-Driven Design (DDD) aggregates.
-
-#### Example
-```python
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
+from pytest import raises
+
 from aggregate_root import AggregateRoot, DomainEvent
 
-# Domain Events (should be idempotent, past-tense verbs)
-# It's not necessary to include the aggregate ID in the event payload
-# as an aggregate's ID is not permitted to change over the course of
-# its life. When persisting state or publishing the events, the aggregate
-# ID should be obtained from the aggregate instance itself.
-
-
-# In this example, a design choice was made to exclude initial state from
-# the BookCreated event, in favour of producing multiple events in the
-# Book aggregate's factory method.
 
 @dataclass(frozen=True)
 class BookCreated(DomainEvent):
@@ -81,12 +54,6 @@ class CopyReturned(DomainEvent):
     date: datetime
 
 
-# The Book aggregate is defined by a Book AggregateRoot that holds reference
-# to zero or more BookCopy instances. The idea being, the root entity describes
-# the common publication information and the BookCopy holds information 
-# pertaining to a specific physical instance. This makes sense within the
-# inventory bounded context of a library's inventory management subdomain.
-
 class Book(AggregateRoot):
     def __init__(self, isbn: str):
         super().__init__(id=isbn)
@@ -126,11 +93,6 @@ class Book(AggregateRoot):
             raise ValueError("Invalid year published")
 
         instance = cls(isbn)
-
-        # Produce multiple events on create.
-        # By not including initial state in the BookCreated event, we allow for each piece of
-        # data in the aggregate to be represented by a single event type only. This may be
-        # helpful to external event consumers (like read model updaters, or other microservices).
         instance.produce_events(
             BookCreated(),
             BookTitleUpdated(title),
@@ -138,10 +100,6 @@ class Book(AggregateRoot):
             BookYearPublishedUpdated(year_published),
         )
         return instance
-
-    # Methods decorated with @AggregateRoot.produces_events should not directly affect state.
-    # This is where domain invariants and business rules should be validated before returning
-    # one or more DomainEvent subclass instances.
 
     @AggregateRoot.produces_events
     def add_copy(self, barcode: str) -> CopyAdded:
@@ -217,14 +175,6 @@ class Book(AggregateRoot):
                 return CopyReturned(barcode, datetime.now())
         raise ValueError("Copy not found")
 
-
-    # Methods decorated with @AggregateRoot.handles_events are responsible for updating aggregate
-    # state. They must not raise any exceptions. This allows for backwards compatibility in
-    # event-sourced systems that rehydrate aggregates from an event store using 
-    # AggregateRoot.apply_event() as opposed to setting state from a simple CRUD data model.
-    # I.e., if business logic changes over time, we do not want historical events failing to be
-    # applied when loading an aggregate that was previously updated using old business logic.
-
     @AggregateRoot.handles_events(BookTitleUpdated)
     def _handle_book_title_updated(self, event: BookTitleUpdated):
         self._title = event.title
@@ -258,12 +208,6 @@ class Book(AggregateRoot):
                 copy.check_in()
 
 
-# BookCopy is part of the Book aggregate, but is not a subclass of AggregateRoot.
-# this is because in DDD, all interactions with a domain aggregate must come through the root.
-# I.e., The Book AggregateRoot is responsible for managing it's BookCopy instances.
-# A domain aggregate is a transactional boundary. Whenever an interface wishes to execute a
-# command that impacts a book copy, it must load the entire Book aggregate and subsequently
-# save the entire aggregate in a single transaction.
 class BookCopy:
     def __init__(self, barcode: str):
         self._barcode: str = barcode
@@ -284,32 +228,17 @@ class BookCopy:
         return self._barcode
 
 
-# example usage:
-# In real-world applications, interactions with the domain would come through application
-# services and persistence would be abstracted via repositories.
-
-# Use the factory method to create a new book record
-book = Book.create("9781617294549", "Microservices Patterns", "Chris Richardson", 2019)
-
-# Add some physical copies
-book.add_copy("BARCODE_1")
-book.add_copy("BARCODE_2")
-
-# Borrow a copy
-book.borrow_copy("BARCODE_1", "USER_1")
-
-# Return a copy
-book.return_copy("BARCODE_1")
-
-# Remove a copy from the shelves
-book.remove_copy("BARCODE_1")
-
-# In a repository, obtain the pending events for saving
-events = book.pending_events
-# ... save the events or use the events to update the data model
-book.clear_events()
-
-# Or, to automatically clear the pending events after saving.
-with book.flush() as events:
-    # ... save the events or use the events to update the data model
-```
+def test_library():
+    book = Book.create("9783161484100", "The Hobbit", "J.R.R. Tolkien", 1937)
+    assert book.aggregate_id == "9783161484100"
+    book.add_copy("123456")
+    book.add_copy("234567")
+    assert len(book.copies) == 2
+    book.borrow_copy("123456", "user1")
+    with raises(ValueError):
+        book.borrow_copy("123456", "user2")
+    book.borrow_copy("234567", "user3")
+    book.return_copy("123456")
+    book.borrow_copy("123456", "user2")
+    book.remove_copy("123456")
+    assert len(book.copies) == 1
