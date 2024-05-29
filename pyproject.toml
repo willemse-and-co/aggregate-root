@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aggregate-root"
-version = "0.0.3"
+version = "0.0.5"
 authors = [
   { name="Jeremy Willemse", email="jeremy@willemse.co" },
 ]
