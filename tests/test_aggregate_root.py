@@ -5,26 +5,26 @@ from uuid import UUID, uuid4
 from pytest import raises
 
 import aggregate_root
-from aggregate_root import AggregateRoot, DomainEvent
+from aggregate_root import AggregateRoot, Event
 
 
 @dataclass(frozen=True)
-class ExampleCreated(DomainEvent):
+class ExampleCreated(Event):
     pass
 
 
 @dataclass(frozen=True)
-class ExampleValueUpdated(DomainEvent):
+class ExampleValueUpdated(Event):
     value: int
 
 
 @dataclass(frozen=True)
-class ExampleLocked(DomainEvent):
+class ExampleLocked(Event):
     pass
 
 
 @dataclass(frozen=True)
-class ExampleUnlocked(DomainEvent):
+class ExampleUnlocked(Event):
     pass
 
 
@@ -63,7 +63,7 @@ class ExampleAggregateRoot(AggregateRoot):
     def _handle_value_updated(self, event: ExampleValueUpdated):
         self._value = event.value
 
-    def handle_event(self, event: DomainEvent) -> None:
+    def handle_event(self, event: Event) -> None:
         if isinstance(event, ExampleLocked):
             self._locked = True
         elif isinstance(event, ExampleUnlocked):

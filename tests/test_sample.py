@@ -5,43 +5,43 @@ from typing import Optional
 
 from pytest import raises
 
-from aggregate_root import AggregateRoot, DomainEvent
+from aggregate_root import AggregateRoot, Event
 
 
 @dataclass(frozen=True)
-class BookCreated(DomainEvent):
+class BookCreated(Event):
     pass
 
 
 @dataclass(frozen=True)
-class BookTitleUpdated(DomainEvent):
+class BookTitleUpdated(Event):
     title: str
 
 
 @dataclass(frozen=True)
-class BookAuthorUpdated(DomainEvent):
+class BookAuthorUpdated(Event):
     author: str
 
 
 @dataclass(frozen=True)
-class BookYearPublishedUpdated(DomainEvent):
+class BookYearPublishedUpdated(Event):
     year_published: int
 
 
 @dataclass(frozen=True)
-class CopyAdded(DomainEvent):
+class CopyAdded(Event):
     barcode: str
     date: datetime
 
 
 @dataclass(frozen=True)
-class CopyRemoved(DomainEvent):
+class CopyRemoved(Event):
     barcode: str
     date: datetime
 
 
 @dataclass(frozen=True)
-class CopyBorrowed(DomainEvent):
+class CopyBorrowed(Event):
     barcode: str
     date: datetime
     borrower_id: str
@@ -49,7 +49,7 @@ class CopyBorrowed(DomainEvent):
 
 
 @dataclass(frozen=True)
-class CopyReturned(DomainEvent):
+class CopyReturned(Event):
     barcode: str
     date: datetime
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass, fields
 from typing import Any, Dict
 
 
-class DomainEventMeta(type):
+class SourceEventMeta(type):
     """
     Metaclass for domain events providing a registry of event types.
 
@@ -19,7 +19,7 @@ class DomainEventMeta(type):
 
     def __new__(
         cls, name: str, bases: tuple, namespace: dict[str, Any]
-    ) -> DomainEventMeta:
+    ) -> SourceEventMeta:
         """
         Create a new domain event class and register it in the registry.
 
@@ -29,11 +29,11 @@ class DomainEventMeta(type):
             namespace (dict): The class attributes.
 
         Returns:
-            DomainEventMeta: The new domain event class.
+            SourceEventMeta: The new domain event class.
         """
         new_class = super().__new__(cls, name, bases, namespace)
         event_type = getattr(new_class, "event_type", lambda: name)()
-        if name != "DomainEvent":
+        if name not in ("Event", "DomainEvent"):
             if event_type in cls._registry:
                 raise ValueError(
                     f"Event type '{event_type}' is already registered as {cls._registry[name]}"
@@ -42,7 +42,7 @@ class DomainEventMeta(type):
         return new_class
 
     @classmethod
-    def get_event_type(cls, event_type: str) -> type[DomainEvent] | None:
+    def get_event_type(cls, event_type: str) -> type[Event] | None:
         """
         Get the domain event class for the given event type name.
 
@@ -50,18 +50,18 @@ class DomainEventMeta(type):
             event_type (str): The event type name.
 
         Returns:
-            type[DomainEvent] | None: The domain event class or None if not found.
+            type[Event] | None: The domain event class or None if not found.
         """
         return cls._registry.get(event_type)
 
 
 @dataclass(frozen=True)
-class DomainEvent(metaclass=DomainEventMeta):
+class Event(metaclass=SourceEventMeta):
     """
-    Base class for domain events.
+    Base class for aggregate state change events.
 
-    Domain events are immutable data classes representing a change in state of an aggregate root.
-    Each domain event class is uniquely named and registered in the domain event registry.
+    State events are immutable data classes representing a change in state of an aggregate root.
+    Each source event class is uniquely named and registered in the event registry.
     """
 
     @classmethod
@@ -77,7 +77,7 @@ class DomainEvent(metaclass=DomainEventMeta):
         return cls.__name__
 
     @classmethod
-    def from_dict(cls, data: dict) -> DomainEvent:
+    def from_dict(cls, data: dict) -> Event:
         """
         Create a domain event instance from a dictionary of data.
 
@@ -85,7 +85,7 @@ class DomainEvent(metaclass=DomainEventMeta):
             data (dict): A dictionary of event data.
 
         Returns:
-            DomainEvent: The domain event instance.
+            Event: The domain event instance.
         """
         field_names = {f.name for f in fields(cls)}
         filtered_data = {
@@ -101,3 +101,12 @@ class DomainEvent(metaclass=DomainEventMeta):
             dict: A dictionary of event data.
         """
         return self.__dict__
+
+
+@dataclass(frozen=True)
+class DomainEvent(Event):
+    """
+    Base class for domain events.
+
+    """
+    pass

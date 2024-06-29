@@ -11,9 +11,9 @@ pip install aggregate-root
 
 ## Usage
 
-### `AggregateRoot` and `DomainEvent`
+### `AggregateRoot` and `Event`
 
-`AggregateRoot` is the base class for aggregate roots, and `DomainEvent` is the base class for domain events. Together, they enable the creation and management of Domain-Driven Design (DDD) aggregates.
+`AggregateRoot` is the base class for aggregate roots, and `Event` is the base class for state events produced by command methods on AggregateRoots. Together, they enable the creation and management of Domain-Driven Design (DDD) aggregates.
 
 #### Example
 ```python
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
-from aggregate_root import AggregateRoot, DomainEvent
+from aggregate_root import AggregateRoot, Event
 
 # Domain Events (should be idempotent, past-tense verbs)
 # It's not necessary to include the aggregate ID in the event payload
@@ -36,39 +36,39 @@ from aggregate_root import AggregateRoot, DomainEvent
 # Book aggregate's factory method.
 
 @dataclass(frozen=True)
-class BookCreated(DomainEvent):
+class BookCreated(Event):
     pass
 
 
 @dataclass(frozen=True)
-class BookTitleUpdated(DomainEvent):
+class BookTitleUpdated(Event):
     title: str
 
 
 @dataclass(frozen=True)
-class BookAuthorUpdated(DomainEvent):
+class BookAuthorUpdated(Event):
     author: str
 
 
 @dataclass(frozen=True)
-class BookYearPublishedUpdated(DomainEvent):
+class BookYearPublishedUpdated(Event):
     year_published: int
 
 
 @dataclass(frozen=True)
-class CopyAdded(DomainEvent):
+class CopyAdded(Event):
     barcode: str
     date: datetime
 
 
 @dataclass(frozen=True)
-class CopyRemoved(DomainEvent):
+class CopyRemoved(Event):
     barcode: str
     date: datetime
 
 
 @dataclass(frozen=True)
-class CopyBorrowed(DomainEvent):
+class CopyBorrowed(Event):
     barcode: str
     date: datetime
     borrower_id: str
@@ -76,7 +76,7 @@ class CopyBorrowed(DomainEvent):
 
 
 @dataclass(frozen=True)
-class CopyReturned(DomainEvent):
+class CopyReturned(Event):
     barcode: str
     date: datetime
 
@@ -141,7 +141,7 @@ class Book(AggregateRoot):
 
     # Methods decorated with @AggregateRoot.produces_events should not directly affect state.
     # This is where domain invariants and business rules should be validated before returning
-    # one or more DomainEvent subclass instances.
+    # one or more Event subclass instances.
 
     @AggregateRoot.produces_events
     def add_copy(self, barcode: str) -> CopyAdded:

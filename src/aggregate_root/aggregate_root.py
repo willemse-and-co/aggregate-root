@@ -8,9 +8,9 @@ from typing import Any, Callable
 from typing import Iterable as IterableType
 from typing import Iterator, Type, TypeVar, Union
 
-from .domain_event import DomainEvent
+from .events import Event
 
-T = TypeVar("T", bound="DomainEvent")
+T = TypeVar("T", bound="Event")
 A = TypeVar("A", bound="AggregateRoot")
 
 
@@ -20,12 +20,12 @@ class AggregateRoot(ABC):
 
     Attributes:
         _id (str): Uniqe identifier for the aggregate.
-        _pending_events (list[DomainEvent]): List of domain events that have not yet been persisted.
+        _pending_events (list[Event]): List of domain events that have not yet been persisted.
         _version (int): Version of the aggregate, used for optimistic concurrency control.
-        _event_handlers (dict[type, Callable[["AggregateRoot", DomainEvent], None]]): Mapping of event types to handler methods.
+        _event_handlers (dict[type, Callable[["AggregateRoot", Event], None]]): Mapping of event types to handler methods.
     """
 
-    _event_handlers: dict[type, Callable[["AggregateRoot", DomainEvent], None]]
+    _event_handlers: dict[type, Callable[["AggregateRoot", Event], None]]
 
     def __init__(self, id: str) -> None:
         """
@@ -47,7 +47,7 @@ class AggregateRoot(ABC):
 
         """
         self._id: str = id
-        self._pending_events: list[DomainEvent] = []
+        self._pending_events: list[Event] = []
         self._version: int = 0
 
     @classmethod
@@ -71,12 +71,12 @@ class AggregateRoot(ABC):
         return self._id
 
     @property
-    def pending_events(self) -> list[DomainEvent]:
+    def pending_events(self) -> list[Event]:
         """
         Get the list of pending domain events that have not yet been persisted.
 
         Returns:
-            list[DomainEvent]: The list of pending domain events.
+            list[Event]: The list of pending domain events.
         """
         return self._pending_events
 
@@ -105,7 +105,7 @@ class AggregateRoot(ABC):
             raise ValueError("Version must be greater than or equal to current version")
         self._version = value
 
-    def produce_events(self, *events: DomainEvent) -> None:
+    def produce_events(self, *events: Event) -> None:
         """
         Produce one or more events and apply them to the aggregate.
 
@@ -123,7 +123,7 @@ class AggregateRoot(ABC):
         See also: produces_events decorator
 
         Parameters:
-            *events (DomainEvent): One or more domain events to apply to the aggregate.
+            *events (Event): One or more domain events to apply to the aggregate.
 
         Example:
             >>> class MyAggregate(AggregateRoot):
@@ -139,7 +139,7 @@ class AggregateRoot(ABC):
             self.apply_event(event)
             self._pending_events.append(event)
 
-    def apply_event(self, *events: DomainEvent) -> None:
+    def apply_event(self, *events: Event) -> None:
         """
         Apply one or more events to the aggregate.
 
@@ -152,7 +152,7 @@ class AggregateRoot(ABC):
         aggregate from a sequence of persisted events.
 
         Parameters:
-            *events (DomainEvent): One or more domain events to apply to the aggregate.
+            *events (Event): One or more domain events to apply to the aggregate.
 
         Example:
             >>> # Example load() function that reconstitutes an aggregate from a sequence of events
@@ -194,8 +194,8 @@ class AggregateRoot(ABC):
 
     @classmethod
     def produces_events(
-        cls, method: Callable[..., Union[DomainEvent, IterableType[DomainEvent], None]]
-    ) -> Callable[..., Union[DomainEvent, IterableType[DomainEvent], None]]:
+        cls, method: Callable[..., Union[Event, IterableType[Event], None]]
+    ) -> Callable[..., Union[Event, IterableType[Event], None]]:
         """
         Decorator to mark a method as producing domain events.
 
@@ -227,7 +227,7 @@ class AggregateRoot(ABC):
         @wraps(method)
         def wrapper(
             self: AggregateRoot, *args: Any, **kwargs: Any
-        ) -> Union[DomainEvent, IterableType[DomainEvent], None]:
+        ) -> Union[Event, IterableType[Event], None]:
             events = method(self, *args, **kwargs)
             if events is not None:
                 if isinstance(events, IterableCollection):
@@ -270,7 +270,7 @@ class AggregateRoot(ABC):
 
         return decorator
 
-    def handle_event(self, event: DomainEvent) -> None:
+    def handle_event(self, event: Event) -> None:
         """
         Handle events that do not have a specific event handler.
 
@@ -279,7 +279,7 @@ class AggregateRoot(ABC):
         nothing.
 
         Parameters:
-            event (DomainEvent): The domain event to handle.
+            event (Event): The domain event to handle.
 
         Example:
             >>> class MyAggregate(AggregateRoot):
@@ -287,14 +287,14 @@ class AggregateRoot(ABC):
             ...     def _handle_my_event(self, event: MyEvent):
             ...         # handle MyEvent
             ...
-            ...     def handle_event(self, event: DomainEvent):
+            ...     def handle_event(self, event: Event):
             ...         if isinstance(event, MyOtherEvent):
             ...             # handle MyOtherEvent
         """
         pass
 
     @contextmanager
-    def flush(self) -> Iterator[list[DomainEvent]]:
+    def flush(self) -> Iterator[list[Event]]:
         """
         Context manager to flush (process and clear) pending events.
 
