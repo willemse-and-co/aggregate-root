@@ -109,4 +109,5 @@ class DomainEvent(Event):
     Base class for domain events.
 
     """
+
     pass

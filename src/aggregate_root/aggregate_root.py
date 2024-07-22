@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABCMeta
 from collections.abc import Iterable as IterableCollection
 from contextlib import contextmanager
 from functools import wraps
@@ -14,18 +14,23 @@ T = TypeVar("T", bound="Event")
 A = TypeVar("A", bound="AggregateRoot")
 
 
-class AggregateRoot(ABC):
+class AggregateMeta(ABCMeta):
+    def __call__(cls, *args, **kwargs):
+        instance = super().__call__(*args, **kwargs)
+        instance._collect_handlers()
+        return instance
+
+
+class AggregateRoot(metaclass=AggregateMeta):
     """
     Base class for aggregate roots in a domain-driven design context.
 
     Attributes:
-        _id (str): Uniqe identifier for the aggregate.
+        _id (str): Unique identifier for the aggregate.
         _pending_events (list[Event]): List of domain events that have not yet been persisted.
         _version (int): Version of the aggregate, used for optimistic concurrency control.
         _event_handlers (dict[type, Callable[["AggregateRoot", Event], None]]): Mapping of event types to handler methods.
     """
-
-    _event_handlers: dict[type, Callable[["AggregateRoot", Event], None]]
 
     def __init__(self, id: str) -> None:
         """
@@ -35,20 +40,19 @@ class AggregateRoot(ABC):
 
         Parameters:
             id (str): Unique identifier for the aggregate.
-
-        Example:
-            >>> class MyAggregate(AggregateRoot):
-            ...     @classmethod
-            ...     def create(cls) -> "MyAggregate":
-            ...         id = str(uuid4())
-            ...         instance = cls(id)  # invoke __init__ method
-            ...         instance.produce_events(MyAggregateCreated())
-            ...         return instance
-
         """
         self._id: str = id
         self._pending_events: list[Event] = []
         self._version: int = 0
+        self._event_handlers: dict[
+            Type[Event], Callable[["AggregateRoot", Event], None]
+        ] = {}
+
+    def _collect_handlers(self):
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+            if hasattr(attr, "__event_type__"):
+                self._event_handlers[getattr(attr, "__event_type__")] = attr
 
     @classmethod
     def aggregate_type(cls) -> str:
@@ -124,16 +128,6 @@ class AggregateRoot(ABC):
 
         Parameters:
             *events (Event): One or more domain events to apply to the aggregate.
-
-        Example:
-            >>> class MyAggregate(AggregateRoot):
-            ...     @classmethod
-            ...     def create(cls) -> "MyAggregate":
-            ...         id = str(uuid4())
-            ...         instance = cls(id)
-            ...         instance.produce_events(MyAggregateCreated())  # produce an event
-            ...         return instance
-
         """
         for event in events:
             self.apply_event(event)
@@ -153,22 +147,13 @@ class AggregateRoot(ABC):
 
         Parameters:
             *events (Event): One or more domain events to apply to the aggregate.
-
-        Example:
-            >>> # Example load() function that reconstitutes an aggregate from a sequence of events
-            >>> def load(aggregate_id: str) -> MyAggregate:
-            ...     events = load_events(aggregate_id)  # example function that loads events from a database
-            ...     aggregate = MyAggregate(aggregate_id)
-            ...     aggregate.apply_event(*events)  # apply all previous events to the aggregate
-            ...     aggregate.version = len(events)  # set the version number
-            ...     return aggregate
-
         """
         for event in events:
             event_type = type(event)
-            if event_type in self._event_handlers:
-                handler = self._event_handlers[event_type]
-                handler(self, event)
+            handler = self._event_handlers.get(event_type, None)
+            if handler:
+                print("**************")
+                handler(event)
             else:
                 self.handle_event(event)
 
@@ -182,19 +167,12 @@ class AggregateRoot(ABC):
         be garbage collected when the instance is destroyed.
 
         See also: flush context manager
-
-        Example:
-            >>> # Example save() function that persists the aggregate to a database
-            >>> def save(aggregate: MyAggregate) -> None:
-            ...     events = aggregate.pending_events
-            ...     persist_events(aggregate.aggregate_id, events) # example function that persists events to a database
-            ...     aggregate.clear_events()  # clear the pending events
         """
         self._pending_events.clear()
 
-    @classmethod
+    @staticmethod
     def produces_events(
-        cls, method: Callable[..., Union[Event, IterableType[Event], None]]
+        method: Callable[..., Union[Event, IterableType[Event], None]]
     ) -> Callable[..., Union[Event, IterableType[Event], None]]:
         """
         Decorator to mark a method as producing domain events.
@@ -212,24 +190,14 @@ class AggregateRoot(ABC):
 
         Returns:
             Callable: The decorated method.
-
-        Example:
-            >>> class Product(AggregateRoot):
-            ...     @AggregateRoot.produces_events
-            ...     def subtract_from_inventory(self, count: int) -> InventoryUpdated:
-            ...         if count <= 0:
-            ...             raise ValueError("Count must be greater than zero")
-            ...         if self.inventory_count < count:
-            ...             raise ValueError("Insufficient inventory")
-            ...         return InventoryUpdated(self.inventory_count - count)
         """
 
         @wraps(method)
         def wrapper(
-            self: AggregateRoot, *args: Any, **kwargs: Any
+            self: "AggregateRoot", *args: Any, **kwargs: Any
         ) -> Union[Event, IterableType[Event], None]:
             events = method(self, *args, **kwargs)
-            if events is not None:
+            if events:
                 if isinstance(events, IterableCollection):
                     self.produce_events(*events)
                 else:
@@ -238,10 +206,8 @@ class AggregateRoot(ABC):
 
         return wrapper
 
-    @classmethod
-    def handles_events(
-        cls: Any, event_type: Type[T]
-    ) -> Callable[[Callable[[A, T], None]], Callable[[A, T], None]]:
+    @staticmethod
+    def handles_events(event_type: Type[T]):
         """
         Decorator to mark a method as handling specific domain events.
 
@@ -259,14 +225,11 @@ class AggregateRoot(ABC):
 
         Returns:
             Callable: The decorator.
-
         """
 
-        def decorator(handler: Callable[[A, T], None]) -> Callable[[A, T], None]:
-            if not hasattr(cls, "_event_handlers") or cls._event_handlers is None:
-                cls._event_handlers = {}
-            cls._event_handlers[event_type] = handler
-            return handler
+        def decorator(func: Callable[[A, T], None]):
+            setattr(func, "__event_type__", event_type)
+            return func
 
         return decorator
 
@@ -280,16 +243,6 @@ class AggregateRoot(ABC):
 
         Parameters:
             event (Event): The domain event to handle.
-
-        Example:
-            >>> class MyAggregate(AggregateRoot):
-            ...     @AggregateRoot.handles_events(MyEvent)
-            ...     def _handle_my_event(self, event: MyEvent):
-            ...         # handle MyEvent
-            ...
-            ...     def handle_event(self, event: Event):
-            ...         if isinstance(event, MyOtherEvent):
-            ...             # handle MyOtherEvent
         """
         pass
 

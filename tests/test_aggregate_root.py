@@ -4,7 +4,6 @@ from uuid import UUID, uuid4
 
 from pytest import raises
 
-import aggregate_root
 from aggregate_root import AggregateRoot, Event
 
 
